@@ -18,7 +18,6 @@ class ScorerInstance(Instance):
     source_text: Union[None, Text]
     topic: Union[None, Text]
 
-
 @dataclass(frozen=True, eq=True)
 class DedupScorerInstance(ScorerInstance):
     in_sent_claim_idx: int

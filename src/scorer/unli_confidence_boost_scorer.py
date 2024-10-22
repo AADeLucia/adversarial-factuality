@@ -133,6 +133,34 @@ class UNLIConfidenceBoostScorer(Scorer):
         ]
 
 
+@Scorer.register("unli-confidence-boost-from-file")
+class UNLIConfidenceBoostFromFileScorer(UNLIConfidenceBoostScorer):
+    """1 - p(claim | bleached_context)"""
+
+    __NAME__ = "unli-confidence-boost-from-file"
+
+    def __init__(
+            self,
+            bleached_templates_path: Text,
+            entailer: Entailer,
+            cap_entailer: Optional[Entailer] = None,
+            epsilon: float = 1e-3,
+    ):
+        """We don't explicitly require the entailer to
+        be soft, but practically people should always use a
+        soft entailer for proper tie-breaking.
+        """
+        with open(bleached_templates_path, "r") as f:
+            bleached_templates = f.read().splitlines()
+
+        super().__init__(
+            bleached_templates,
+            entailer,
+            cap_entailer,
+            epsilon
+        )
+
+
 @Scorer.register("unli-confidence-boost-from-question")
 class UNLIConfidenceBoostFromQuestionScorer(Scorer):
     """1 - p(claim | bleached_context)"""

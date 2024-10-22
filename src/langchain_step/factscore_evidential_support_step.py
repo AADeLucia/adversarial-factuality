@@ -57,11 +57,11 @@ class FActScoreEvidentialSupportOutputParser(BaseOutputParser[FActScoreEvidentia
 class FActScoreEvidentialSupportStep(Step):
     @overrides
     def get_prompt_template(self) -> Runnable:
-        
+        # REMOVED "about topic" FROM THE TEMPLATE
         return ChatPromptTemplate.from_messages(
             [
                 ("human", (
-                    "Answer the question about {topic} based on the given context.\n\n"
+                    "Answer the question based on the given context.\n\n"
                     "{parsed_passages}\n\n"
                     "Input: {input} True or False?\nOutput:"
                 ))
