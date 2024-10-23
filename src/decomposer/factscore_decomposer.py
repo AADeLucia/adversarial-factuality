@@ -61,18 +61,12 @@ class FActScoreDecomposer(Decomposer):
 
         example_selector = None
         if example_path is not None:
-            
+            # Examples are in {'input': '', 'output': ''} format
             example_selector = ConstantExampleSelector()
             with open(example_path, "r", encoding="utf-8") as file_:
-                items = file_.read().split("\n\n")
-                for item in items:
-                    lines = item.split("\n")
-                    example = {
-                        "input": lines[0],
-                        "output": "\n".join(lines[1:]),
-                    }
+                examples = json.load(file_)
+                for example in examples:
                     example_selector.add_example(example)
-                    
 
         self._agent = DecompositionStep(example_selector=example_selector).chain_llm(self._llm)
         self._runnable_config = RunnableConfig(max_concurrency=32)
