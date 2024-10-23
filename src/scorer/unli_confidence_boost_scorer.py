@@ -53,7 +53,7 @@ class UNLIConfidenceBoostScorer(Scorer):
             for bc in bleached_context
         ]
 
-        scores = self._entailer(inputs)
+        scores = self._entailer(inputs, desc="UNLI Scoring")
         # Adding lowerbound to cap_score to avoid log(0)
         score = max(*scores, self._epsilon)
 
@@ -62,7 +62,7 @@ class UNLIConfidenceBoostScorer(Scorer):
         if self._cap_entailer is not None:
             # if cap_score == 1, then the claim needs to be
             # capped regardless of the score
-            cap_scores = self._cap_entailer(inputs)
+            cap_scores = self._cap_entailer(inputs, desc="Cap Scoring")
             cap_score = max(cap_scores)
             score = max(score, cap_score)
 
@@ -91,7 +91,7 @@ class UNLIConfidenceBoostScorer(Scorer):
             for bt in self._bleached_templates
         ]
 
-        all_scores = self._entailer(inputs)
+        all_scores = self._entailer(inputs, desc="UNLI Scoring")
         all_scores = [
             all_scores[
                 i * len(self._bleached_templates) : (i + 1) * len(self._bleached_templates)
@@ -102,7 +102,7 @@ class UNLIConfidenceBoostScorer(Scorer):
         all_cap_entailer_outputs = [{}] * len(instances)
 
         if self._cap_entailer is not None:
-            cap_scores = self._cap_entailer(inputs)
+            cap_scores = self._cap_entailer(inputs, desc="Cap Scoring")
             all_cap_entailer_outputs = [
                 {
                     "cap_scores": cap_scores[
@@ -220,7 +220,7 @@ class UNLIConfidenceBoostFromQuestionScorer(Scorer):
             for bc in bleached_context
         ]
 
-        scores = self._entailer(inputs)
+        scores = self._entailer(inputs, desc="UNLI Scoring")
         # Adding lowerbound to cap_score to avoid log(0)
         score = max(*scores, self._epsilon)
 
@@ -229,7 +229,7 @@ class UNLIConfidenceBoostFromQuestionScorer(Scorer):
         if self._cap_entailer is not None:
             # if cap_score == 1, then the claim needs to be
             # capped regardless of the score
-            cap_scores = self._cap_entailer(inputs)
+            cap_scores = self._cap_entailer(inputs, desc="Cap Scoring")
             cap_score = max(cap_scores)
             score = max(score, cap_score)
 
@@ -260,7 +260,7 @@ class UNLIConfidenceBoostFromQuestionScorer(Scorer):
             for bt in bleached_context_dict[instance.topic]
         ]
 
-        all_scores = self._entailer(inputs)
+        all_scores = self._entailer(inputs, desc="UNLI Scoring")
         all_scores = [
             all_scores[
                 i * self._num_bleached_templates : (i + 1) * self._num_bleached_templates
@@ -271,7 +271,7 @@ class UNLIConfidenceBoostFromQuestionScorer(Scorer):
         all_cap_entailer_outputs = [{}] * len(instances)
 
         if self._cap_entailer is not None:
-            cap_scores = self._cap_entailer(inputs)
+            cap_scores = self._cap_entailer(inputs, desc="Cap Scoring")
             all_cap_entailer_outputs = [
                 {
                     "cap_scores": cap_scores[

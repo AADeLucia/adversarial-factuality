@@ -83,6 +83,7 @@ class Entailer(Registrable):
     def __call__(
         self,
         instances: List[EntailerInstance],
+        desc: Text = "Entailment",
         silent: bool = False
     ) -> List[float]:
         """ Lazy load the model and tokenizer to be friendly to
@@ -118,6 +119,7 @@ class Entailer(Registrable):
             page_size=self._internal_batch_size,
             func=self._maybe_cached_call_batch,
             combination=lambda x: [xxx for xx in x for xxx in xx],
+            desc=desc,
             silent=silent
         )
         

@@ -4,6 +4,7 @@ atomic facts.
 """
 
 import spacy
+import json
 from overrides import overrides
 from typing import List, Text, Optional, Tuple
 from langchain_openai import ChatOpenAI
@@ -29,11 +30,11 @@ class FActScoreDecomposer(Decomposer):
     def __init__(
         self,
         model_name: Text,
-        example_path: Text,
         nlp_model_name: Text = "en_core_web_sm",
         sentencize: bool = True,
         base_url: Optional[Text] = None,
-        api_key: Optional[Text] = None
+        api_key: Optional[Text] = None,
+        example_path: Optional[Text] = None,
     ):
         """In general, this decomposer runs a sentence splitter,
         and then a atomic fact extractor to get the atomic facts.
@@ -47,42 +48,6 @@ class FActScoreDecomposer(Decomposer):
         self._nlp = spacy.load(nlp_model_name, disable=["ner", "parser"])
         self._nlp.add_pipe("sentencizer")
         self._sentencize = sentencize
-
-        # def _split_atomic_facts(output: Text) -> List[Text]:
-        #     """Split the atomic facts from the output.
-        #     each line is an atomic fact start with '- ',
-        #     need to remove the '- ' from the start of the line.
-        #     """
-
-        #     return [
-        #         line[2:].strip() for line in output.split("\n") if line.startswith("- ")
-        #     ]
-
-        # self._example_selector = ConstantExampleSelector()
-        # with open(self._example_path, "r", encoding="utf-8") as file_:
-        #     items = file_.read().split("\n\n")
-        #     for item in items:
-        #         lines = item.split("\n")
-        #         example = {
-        #             "input": lines[0],
-        #             "output": "\n".join(lines[1:]),
-        #         }
-        #         self._example_selector.add_example(example)
-
-        # self._agent = ChatInterface(
-        #     model_name=self._model_name,
-        #     batch_size=32,
-        #     max_tokens=512,
-        #     system_message=None,
-        #     instruction_prompt=[],
-        #     input_example_prompt="Please breakdown the following sentence into independent facts: {input}",
-        #     output_example_prompt="{output}",
-        #     output_parser=_split_atomic_facts,
-        #     example_selector=self._example_selector,
-        #     base_url=self._base_url,
-        #     api_key=self._api_key,
-        #     max_concurrency=32,
-        # )
         
         self._llm = ChatOpenAI(
             model_name=self._model_name,
@@ -94,7 +59,22 @@ class FActScoreDecomposer(Decomposer):
             temperature=0.0,
         )
 
-        self._agent = DecompositionStep().chain_llm(self._llm)
+        example_selector = None
+        if example_path is not None:
+            
+            example_selector = ConstantExampleSelector()
+            with open(example_path, "r", encoding="utf-8") as file_:
+                items = file_.read().split("\n\n")
+                for item in items:
+                    lines = item.split("\n")
+                    example = {
+                        "input": lines[0],
+                        "output": "\n".join(lines[1:]),
+                    }
+                    example_selector.add_example(example)
+                    
+
+        self._agent = DecompositionStep(example_selector=example_selector).chain_llm(self._llm)
         self._runnable_config = RunnableConfig(max_concurrency=32)
         
     @overrides

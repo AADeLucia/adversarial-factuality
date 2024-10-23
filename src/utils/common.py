@@ -26,6 +26,7 @@ def paginate_func(
     page_size: int,
     func: Callable[..., T],
     combination: Callable[[List[T]], T],
+    desc: Text = "Paginating",
     silent: bool = False
 ) -> T:
     
@@ -33,7 +34,7 @@ def paginate_func(
     
     iterator = range(0, len(items), page_size)
     if not silent:
-        iterator = tqdm(iterator, desc="Paginating")
+        iterator = tqdm(iterator, desc=desc)
         
     for i in iterator:
         results.append(

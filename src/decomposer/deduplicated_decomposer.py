@@ -234,7 +234,8 @@ class DeduplicatedDecomposer(Decomposer):
             [
                 EntailerInstance(premise=instance.sent, hypothesis=instance.text)
                 for _, instance in instance_tuples
-            ]
+            ],
+            desc="Premise=Sent, Hypothesis=Claim",
         )
         index_swap = [
             tidx
@@ -244,28 +245,6 @@ class DeduplicatedDecomposer(Decomposer):
 
         # grouped_instances: Dict[Text, Dict[Text, Dict[Text, Union[int, float]]]] = {}
         grouped_instances: Dict[Text, List[Dict[Text, Union[int, float]]]] = {}
-
-        # for er, (iidx, (idx, instance)) in zip(sent_ent_results, instance_tuples_wreal_idx):
-        #     if idx not in grouped_instances:
-        #         grouped_instances[idx] = {}
-        #     if instance.text not in grouped_instances[idx]:
-        #         grouped_instances[idx][instance.text] = {
-        #             "score": 0.0,
-        #             "from_index": iidx
-        #         }
-
-        #     grouped_instances[idx][instance.text] = {
-        #         "score": max(grouped_instances[idx][instance.text]['score'], er),
-        #         "from_index": iidx if er > grouped_instances[idx][instance.text]['score'] else grouped_instances[idx][instance.text]['from_index']
-        #     }
-
-        # grouped_texts = {
-        #     idx: [
-        #         (score_dict['from_index'], text)
-        #         for text, score_dict in instances.items() if score_dict['score'] > 0.5
-        #     ]
-        #     for idx, instances in grouped_instances.items()
-        # }
 
         for iidx, (er, old_index) in enumerate(zip(
             sent_ent_results, index_swap
@@ -297,7 +276,7 @@ class DeduplicatedDecomposer(Decomposer):
                         )
                     )
 
-        parwise_entailment_scoring = self._entailer(pairwise_entailment_inputs)
+        parwise_entailment_scoring = self._entailer(pairwise_entailment_inputs, desc="Pairwise Entailment")
 
         # create intra_entailment_matrix for each of the group
         intra_entailment_matrices = {}
@@ -372,7 +351,7 @@ class DeduplicatedDecomposer(Decomposer):
             EntailerInstance(premise=instance.sent, hypothesis=instance.text)
             for instance in instances
         ]
-        sent_ent_results = self._entailer(sent_filter_instances)
+        sent_ent_results = self._entailer(sent_filter_instances, desc="Premise=Sent, Hypothesis=Claim")
 
         # filter out claims that are not entailed
         instances_wreal_idx = [
@@ -402,7 +381,7 @@ class DeduplicatedDecomposer(Decomposer):
                         )
                     )
 
-        pairwise_entailment_scoring = self._entailer(pairwise_entailment_instances)
+        pairwise_entailment_scoring = self._entailer(pairwise_entailment_instances, desc="Pairwise Entailment")
 
         intra_ent_mat = np.array(
             [
