@@ -106,7 +106,7 @@ class FActScoreDecomposer(Decomposer):
             num_sents = []
             
             for idx, instance in enumerate(instances):
-                sents = self._nlp(instance.text).sents
+                sents = list(self._nlp(instance.text).sents)
                 num_sents.append(len(sents))
                 for sentence in sents:
                     # inputs.append(LLMQueryInstance(id=idx, input=sentence.text))

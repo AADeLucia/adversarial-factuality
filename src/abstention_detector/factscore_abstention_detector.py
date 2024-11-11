@@ -30,7 +30,6 @@ class FActScoreAbstentionDetector(AbstentionDetector):
     def _detect_abstention(self, response: Text) -> bool:
         """
         """
-
         def remove_citation(text):
             # text = re.sub(r'\[\d+\]', '', text)
             text = re.sub(r"\s*\[\d+\]\s*","", text)

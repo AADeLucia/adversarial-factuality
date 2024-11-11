@@ -38,8 +38,13 @@ class ScoreGenerationReferenceTask(Task):
         """
         """
         # Load file in JSON format
-        with open(self.input_path, "r", encoding='utf-8') as file_:
-            data = json.load(file_)
+        # Check if JSON-lines or JSON
+        if self.input_path.endswith(".jsonl"):
+            with open(self.input_path, "r", encoding='utf-8') as file_:
+                data = [json.loads(line) for line in file_]
+        else:
+            with open(self.input_path, "r", encoding='utf-8') as file_:
+                data = json.load(file_)
 
         # Prepare input
         inputs = [ScorerInstance(text=item[self.text_key], topic=item[self.topic_key], source_text=item[self.source_key]) for item in tqdm(data)]
