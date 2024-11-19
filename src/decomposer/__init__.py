@@ -2,3 +2,4 @@ from .decomposer import Decomposer
 from .factscore_decomposer import FActScoreDecomposer
 from .deduplicated_decomposer import DeduplicatedDecomposer
 from .refined_decomposer import RefinedDecomposer
+from .precomputed_decomposer import PrecomputedDecomposer

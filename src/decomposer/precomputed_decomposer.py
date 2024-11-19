@@ -44,7 +44,7 @@ class PrecomputedDecomposer(Decomposer):
         in {'topic': '', 'claims': []} format
         """
         super().__init__()
-        self.precomputed_claims = self._load_claims(claims_path, topic_key, claims_key)
+        self.precomputed_claims = _load_claims(claims_path, topic_key, claims_key)
 
     @overrides
     def _decompose(self, instance: ScorerInstance) -> List[ScorerInstance]:
