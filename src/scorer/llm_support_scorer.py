@@ -112,23 +112,16 @@ class LLMSupportScorer(Scorer):
     @overrides
     def _score(self, instance: ScorerInstance) -> Dict[Text, Union[Text, float]]:
         """ """
-
         # first convert the input instance into the FActScoreQueryInstance
         # by retrieve from the database
         passages = self._retriever.get_passages(instance.topic, instance.text, 5)
 
-        # input_instance = FActScoreQueryInstance(
-        #     id=0,
-        #     topic=instance.topic,
-        #     passages=passages,
-        #     input=instance.text
-        # )
         input_instance = {
             "topic": instance.topic,
             "parsed_passages": "\n\n".join(
                 [
                     f"Title: {passage['title']} Text: {passage['text']}"
-                    for passage in instance.passages
+                    for passage in passages
                 ]
             )
             + "\n\n",
@@ -137,7 +130,11 @@ class LLMSupportScorer(Scorer):
 
         response = self._agent.invoke(input_instance, config=self._runnable_config)
 
-        return {"raw": response.messages, "parsed": response.evidential_support}
+        return {
+                "raw": response.messages,
+                "parsed": response.evidential_support,
+                "support_input": input_instance['parsed_passages']
+            }
 
     @overrides
     def _batch_score(
@@ -155,11 +152,6 @@ class LLMSupportScorer(Scorer):
         assert len(passage_chunks) == len(instances)
 
         input_instances = [
-            # FActScoreQueryInstance(
-            #     id=idx,
-            #     topic=instance.topic,
-            #     passages=passages,
-            #     input=instance.text
             {
                 "topic": instance.topic,
                 "parsed_passages": "\n\n".join(
@@ -176,7 +168,13 @@ class LLMSupportScorer(Scorer):
 
         responses = self._agent.batch(input_instances, config=self._runnable_config)
 
-        return [
-            {"raw": response.messages, "parsed": response.evidential_support}
-            for response in responses
-        ]
+        returns = []
+        for r, i in zip(responses, input_instances):
+            returns.append({
+                "raw": r.messages,
+                "parsed": r.evidential_support,
+                "support_input": i['parsed_passages']
+            })
+
+        return returns
+

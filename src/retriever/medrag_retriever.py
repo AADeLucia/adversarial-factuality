@@ -8,6 +8,7 @@ import sys
 import json
 from typing import List, Dict, Text, Any
 
+from overrides import overrides
 from prompt_toolkit.key_binding.bindings.vi import TextObjectType
 from sentence_transformers.models import Transformer, Pooling
 from sentence_transformers import SentenceTransformer
@@ -68,8 +69,8 @@ class MedRAGRetriever(Retriever):
         """
         text, scores = self.retriever.retrieve(
             question=question,
-            k=self.n_returned_docs * 5,  # # docs to return from each source
-            rrf_k=self.n_returned_docs,  # Final # of docs returned based on top scores
+            k=self.n_returned_docs,  # Final # of docs returned based on top scores
+            rrf_k=self.n_returned_docs * 5,  # # docs to return from each source
             id_only=False
         )
 
