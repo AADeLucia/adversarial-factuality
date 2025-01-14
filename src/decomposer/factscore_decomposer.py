@@ -49,8 +49,8 @@ class FActScoreDecomposer(Decomposer):
             base_url=self._base_url,
             api_key=self._api_key,
             max_tokens=512,
-            # top_p=0.98,
-            model_kwargs={"top_p": 0.98},
+            top_p=0.98,
+            # model_kwargs={"top_p": 0.98},
             temperature=0.0,
         )
 
@@ -70,14 +70,6 @@ class FActScoreDecomposer(Decomposer):
         instance_text = instance.text
         topic = instance.topic
 
-        # return [
-        #     ScorerInstance(text=atom, topic=topic)
-        #     for sidx, sentence in enumerate(self._nlp(instance_text).sents)
-        #     for atom in self._agent([LLMQueryInstance(id=sidx, input=sentence.text)])[0]
-        # ]
-
-        outputs = []
-        
         if not self._sentencize:
             outputs = self._agent.batch([{"input": instance_text}], config=self._runnable_config)
         else:
