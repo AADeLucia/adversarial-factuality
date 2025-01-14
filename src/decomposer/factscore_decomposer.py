@@ -9,13 +9,8 @@ from overrides import overrides
 from typing import List, Text, Optional, Tuple
 from langchain_openai import ChatOpenAI
 from langchain_core.runnables.config import RunnableConfig
-from langchain_interface.example_selectors import ConstantExampleSelector
 from ..utils.instances import ScorerInstance
-# from ..langchain_step.factscore_evidential_support_step import (
-#     FActScoreEvidentialSupportStep,
-#     FActScoreEvidentialSupportResponse
-# )
-from langchain_interface.steps.decomposition_step import (
+from ..langchain_step.decomposition_step import (
     DecompositionStep,
     DecompositionResponse
 )
@@ -30,18 +25,18 @@ class FActScoreDecomposer(Decomposer):
     def __init__(
         self,
         model_name: Text,
+        prompt_path: Text,
         nlp_model_name: Text = "en_core_web_sm",
         sentencize: bool = True,
         base_url: Optional[Text] = None,
         api_key: Optional[Text] = None,
-        example_path: Optional[Text] = None,
+        input_example_prompt: str = "Please breakdown the following sentence into independent facts: {input}",
     ):
         """In general, this decomposer runs a sentence splitter,
-        and then a atomic fact extractor to get the atomic facts.
+        and then an atomic fact extractor to get the atomic facts.
         """
 
         super().__init__()
-        self._example_path = example_path
         self._model_name = model_name
         self._base_url = base_url
         self._api_key = api_key
@@ -59,16 +54,13 @@ class FActScoreDecomposer(Decomposer):
             temperature=0.0,
         )
 
-        example_selector = None
-        if example_path is not None:
-            # Examples are in {'input': '', 'output': ''} format
-            example_selector = ConstantExampleSelector()
-            with open(example_path, "r", encoding="utf-8") as file_:
-                examples = json.load(file_)
-                for example in examples:
-                    example_selector.add_example(example)
+        with open(prompt_path, "r") as file_:
+            prompt = file_.read()
 
-        self._agent = DecompositionStep(example_selector=example_selector).chain_llm(self._llm)
+        self._agent = DecompositionStep(
+            system_prompt=prompt,
+            input_example_prompt=input_example_prompt
+        ).chain_llm(self._llm)
         self._runnable_config = RunnableConfig(max_concurrency=32)
         
     @overrides
