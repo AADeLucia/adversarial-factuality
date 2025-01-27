@@ -30,7 +30,6 @@ class FActScoreDecomposer(Decomposer):
         sentencize: bool = True,
         base_url: Optional[Text] = None,
         api_key: Optional[Text] = None,
-        input_example_prompt: str = "Please breakdown the following sentence into independent facts: {input}",
     ):
         """In general, this decomposer runs a sentence splitter,
         and then an atomic fact extractor to get the atomic facts.
@@ -55,11 +54,12 @@ class FActScoreDecomposer(Decomposer):
         )
 
         with open(prompt_path, "r") as file_:
-            prompt = file_.read()
+            prompt_settings = json.load(file_)
 
         self._agent = DecompositionStep(
-            system_prompt=prompt,
-            input_example_prompt=input_example_prompt
+            system_prompt=prompt_settings.get("system_prompt", ""),
+            input_example_prompt=prompt_settings.get("input_prompt", ""),
+            examples=prompt_settings.get("examples")
         ).chain_llm(self._llm)
         self._runnable_config = RunnableConfig(max_concurrency=32)
         
@@ -71,9 +71,9 @@ class FActScoreDecomposer(Decomposer):
         topic = instance.topic
 
         if not self._sentencize:
-            outputs = self._agent.batch([{"input": instance_text}], config=self._runnable_config)
+            outputs = self._agent.batch([{"input": instance_text.strip()}], config=self._runnable_config)
         else:
-            outputs = self._agent.batch([{"input": sentence.text} for sentence in self._nlp(instance_text).sents], config=self._runnable_config)
+            outputs = self._agent.batch([{"input": sentence.text.strip()} for sentence in self._nlp(instance_text).sents], config=self._runnable_config)
         
         return [ScorerInstance(text=atom, topic=topic, source_text=instance.source_text) for otp in outputs for atom in otp.claims]
     
