@@ -141,6 +141,7 @@ class LLMSupportScorer(Scorer):
         self, instances: List[ScorerInstance]
     ) -> List[Dict[Text, Text | float]]:
         """Now we will first retrieve for all the instances."""
+        print(f"{instances[0]=}")
 
         topics = [instance.topic for instance in instances]
         texts = [instance.text for instance in instances]
@@ -169,11 +170,12 @@ class LLMSupportScorer(Scorer):
         responses = self._agent.batch(input_instances, config=self._runnable_config)
 
         returns = []
-        for r, i in zip(responses, input_instances):
+        for r, i, p in zip(responses, instances, passage_chunks):
             returns.append({
                 "raw": r.messages,
+                "claim_sentence": i.sentence,
                 "parsed": r.evidential_support,
-                "support_input": i['parsed_passages']
+                "support_input": p
             })
 
         return returns

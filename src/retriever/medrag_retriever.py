@@ -6,7 +6,10 @@ Copied from MedRAG/src/utils.py.
 import os
 import sys
 import json
-from typing import List, Dict, Text, Any
+from typing import List, Dict, Text, Any, Tuple, Union
+import traceback
+import logging
+import subprocess
 
 from overrides import overrides
 from prompt_toolkit.key_binding.bindings.vi import TextObjectType
@@ -17,7 +20,15 @@ import torch
 import tqdm
 import numpy as np
 
-from .retriever import Retriever
+# Easier for debugging
+try:
+    from .retriever import Retriever
+except ImportError as err:
+    from retriever import Retriever
+
+FORMAT = '%(asctime)s %(message)s'
+logging.basicConfig(level=logging.INFO, format=FORMAT)
+logger = logging.getLogger(__name__)
 
 corpus_names = {
     "PubMed": ["pubmed"],
@@ -26,6 +37,7 @@ corpus_names = {
     "Wikipedia": ["wikipedia"],
     "MedText": ["textbooks", "statpearls"],
     "MedCorp": ["pubmed", "textbooks", "statpearls", "wikipedia"],
+    "MEDIC": ["pubmed", "textbooks", "statpearls"]
 }
 
 retriever_names = {
@@ -44,11 +56,11 @@ class MedRAGRetriever(Retriever):
     def __init__(
             self,
             retriever_name: Text = "MedCPT",
-            corpus_name: Text = "MedCorp",
+            corpus_name: Text = "MEDIC",
             db_dir: Text = "./corpus",
             HNSW: bool = False,
             cache: bool = False,
-            n_returned_docs: int = 5,
+            n_returned_docs: int = 5
     ):
         self.retriever = RetrievalSystem(
             retriever_name=retriever_name,
@@ -57,6 +69,7 @@ class MedRAGRetriever(Retriever):
             HNSW=HNSW,
             cache=cache)
         self.n_returned_docs = n_returned_docs
+        self.db_dir = db_dir
 
     @overrides
     def get_passages(self, topic: Text, question: Text, k: int) -> List[Dict[Text, Any]]:
@@ -67,37 +80,78 @@ class MedRAGRetriever(Retriever):
         :param k: k is ignored. See n_returned_docs in class initialization.
         :return: 
         """
-        text, scores = self.retriever.retrieve(
-            question=question,
+        results = self.retriever.retrieve(
+            questions=[question],
             k=self.n_returned_docs,  # Final # of docs returned based on top scores
             rrf_k=self.n_returned_docs * 5,  # # docs to return from each source
-            id_only=False
+            id_only=True
         )
-
-        # Format into {'title': '', 'text': '', 'score': }
-        retrieved = []
-        for t, s in zip(text, scores):
-            r = {
-                "id": t["id"],
-                "title": t["title"],
-                "text": t["content"],
-                "score": s
-            }
-            retrieved.append(r)
+        retrieved = self._format_retrieved(results)[0]
         return retrieved
 
     @overrides
     def get_passages_batched(self, topics: List[Text], questions: List[Text], k: int) -> List[List[Dict[Text, Any]]]:
-        """Returns passages for multiple questions.
+        """Returns passages for multiple questions."""
+        logger.debug(f"In MedRAG")
+        batched_results = self.retriever.retrieve(
+            questions=questions,
+            k=self.n_returned_docs,  # Final # of docs returned based on top scores
+            rrf_k=self.n_returned_docs * 5,  # # docs to return from each source
+            id_only=True
+        )
+        logger.debug(f"Done gathering results")
+        retrieved = self._format_retrieved(batched_results)
+        logger.debug(f"Done formatting")
+        return retrieved
 
-        Not optimized, runs serially.
-        """
-        batched_passages = []
-        for t, q in zip(topics, questions):
-            batched_passages.append(
-                self.get_passages(t, q, k)
-            )
-        return batched_passages
+    def _format_retrieved(self, merge_results: List[Tuple[List[Dict[str, Any]], List[float]]]) -> List[List[Dict[Text, Any]]]:
+        # Format into {'title': '', 'text': '', 'score': }
+        retrieved = []
+        for t_batch, s_batch in tqdm.tqdm(merge_results, desc="Formatting retrieved documents", ncols=0):
+            ret = []
+            for t, s in zip(t_batch, s_batch):
+                if not t.get("title"):
+                    t.update(self._load_doc_from_id(t["id"]))
+                r = {
+                    "id": t["id"],
+                    "title": t["title"],
+                    "text": t["content"],
+                    "score": s
+                }
+                ret.append(r)
+            retrieved.append(ret)
+        return retrieved
+
+    def _load_doc_from_id(self, id: Text) -> Dict[Text, Any]:
+        # Hacky way to load the document
+        # Format example: pubmed23n0973_8682
+        id_parts = id.split("_")
+        if len(id_parts) > 2:
+            index = int(id_parts[-1])
+            doc_id = "_".join(id_parts[:-1])
+        else:
+            doc_id, index = id_parts
+            index = int(index)
+
+        if "pubmed" in doc_id:
+            corpus_name = "pubmed"
+        elif "article-" in doc_id:
+            corpus_name = "statpearls"
+        elif "wiki" in doc_id:
+            corpus_name = "wikipedia"
+        else:
+            corpus_name = "textbooks"
+
+        doc_path = os.path.join(self.db_dir, corpus_name, "chunk", f"{doc_id}.jsonl")
+
+        # https://stackoverflow.com/questions/6022384/bash-tool-to-get-nth-line-from-a-file
+        doc = subprocess.check_output([
+            "sed",
+            f"{index+1}q;d",  # sed is not 0-based
+            doc_path
+        ])
+        doc = json.loads(doc)
+        return doc
 
 
 #####################
@@ -157,7 +211,7 @@ def embed(chunk_dir, index_dir, model_name, **kwarg):
         os.makedirs(save_dir)
 
     with torch.no_grad():
-        for fname in tqdm.tqdm(fnames):
+        for fname in tqdm.tqdm(fnames, desc="Embedding"):
             fpath = os.path.join(chunk_dir, fname)
             save_path = os.path.join(save_dir, fname.replace(".jsonl", ".npy"))
             if os.path.exists(save_path):
@@ -197,13 +251,18 @@ def construct_index(index_dir, model_name, h_dim=768, HNSW=False, M=32):
         else:
             index = faiss.IndexFlatIP(h_dim)
 
-    for fname in tqdm.tqdm(sorted(os.listdir(os.path.join(index_dir, "embedding")))):
-        curr_embed = np.load(os.path.join(index_dir, "embedding", fname))
-        index.add(curr_embed)
+    for fname in tqdm.tqdm(sorted(os.listdir(os.path.join(index_dir, "embedding"))), desc="Loading embeddings"):
+        curr_path = os.path.join(index_dir, "embedding", fname)
+        curr_embed = np.load(curr_path)
+        try:
+            index.add(curr_embed)
+        except Exception as e:
+            logger.error(f"Error loading {curr_path}:\n{e}\n{traceback.format_exc()}")
+            continue
         with open(os.path.join(index_dir, "metadatas.jsonl"), 'a+') as f:
             f.write("\n".join(
                 [json.dumps({'index': i, 'source': fname.replace(".npy", "")}) for i in range(len(curr_embed))]) + '\n')
-
+        logger.debug(f"Wrote meta to {os.path.join(index_dir, 'metadatas.jsonl')}")
     faiss.write_index(index, os.path.join(index_dir, "faiss.index"))
     return index
 
@@ -233,7 +292,7 @@ class Retriever:
                     os.path.join(db_dir, self.corpus_name, "statpearls_NBK430685.tar.gz"),
                     os.path.join(self.db_dir, self.corpus_name)))
                 print("Chunking the statpearls corpus...")
-                os.system("python src/data/statpearls.py")
+                os.system(f"python {os.environ['MEDIC']}/dependencies/MedRAG/src/data/statpearls.py --data-dir {self.db_dir}")
         self.index_dir = os.path.join(self.db_dir, self.corpus_name, "index",
                                       self.retriever_name.replace("Query-Encoder", "Article-Encoder"))
         if "bm25" in self.retriever_name.lower():
@@ -318,46 +377,64 @@ class Retriever:
                 self.metadatas = [json.loads(line) for line in
                                   open(os.path.join(self.index_dir, "metadatas.jsonl")).read().strip().split('\n')]
             if "contriever" in self.retriever_name.lower():
-                self.embedding_function = SentenceTransformer(self.retriever_name,
-                                                              device="cuda" if torch.cuda.is_available() else "cpu")
+                self.embedding_function = SentenceTransformer(
+                    self.retriever_name,
+                    device="cuda" if torch.cuda.is_available() else "cpu"
+                )
             else:
-                self.embedding_function = CustomizeSentenceTransformer(self.retriever_name,
-                                                                       device="cuda" if torch.cuda.is_available() else "cpu")
+                self.embedding_function = CustomizeSentenceTransformer(
+                    self.retriever_name,
+                    device="cuda" if torch.cuda.is_available() else "cpu"
+                )
             self.embedding_function.eval()
 
-    def get_relevant_documents(self, question, k=32, id_only=False, **kwarg):
-        assert type(question) == str
-        question = [question]
-
+    def get_relevant_documents(self, questions, k=32, id_only=False, **kwarg):
+        assert isinstance(questions, list), "Questions should be a list of strings"
+        # BM25 not updated for batched
         if "bm25" in self.retriever_name.lower():
-            res_ = [[]]
-            hits = self.index.search(question[0], k=k)
-            res_[0].append(np.array([h.score for h in hits]))
-            ids = [h.docid for h in hits]
-            indices = [{"source": '_'.join(h.docid.split('_')[:-1]), "index": eval(h.docid.split('_')[-1])} for h in
-                       hits]
+            res_ = [[] for _ in range(len(questions))]
+            for idx, question in enumerate(questions):
+                hits = self.index.search(question, k=k)
+                res_[idx].append(np.array([h.score for h in hits]))
+                ids = [h.docid for h in hits]
+                indices = [{"source": '_'.join(h.docid.split('_')[:-1]), "index": eval(h.docid.split('_')[-1])} for h in
+                           hits]
         else:
+            logger.debug("Embedding")
             with torch.no_grad():
-                query_embed = self.embedding_function.encode(question, **kwarg)
-            res_ = self.index.search(query_embed, k=k)
-            ids = ['_'.join([self.metadatas[i]["source"], str(self.metadatas[i]["index"])]) for i in res_[1][0]]
-            indices = [self.metadatas[i] for i in res_[1][0]]
-
-        scores = res_[0][0].tolist()
-
+                query_embeds = self.embedding_function.encode(questions, **kwarg)
+            # ( scores: [# questions x # docs], index IDs: [# questions x # docs] )
+            logger.debug("Searching index")
+            res_ = self.index.search(query_embeds, k=k)
+            logger.debug(f"Gathering IDs")
+            ids = [
+                ['_'.join([self.metadatas[i]["source"], str(self.metadatas[i]["index"])]) for i in res_[1][idx]] for idx in range(len(questions))
+            ]
+            indices = [
+                [self.metadatas[i] for i in res_[1][idx]] for idx in range(len(questions))
+            ]
+        logger.debug("Consolidating scores")
+        scores = [res_[0][idx].tolist() for idx in range(len(questions))]
         if id_only:
-            return [{"id": i} for i in ids], scores
+            return [[{"id": i} for i in id_list] for id_list in ids], scores
         else:
-            return self.idx2txt(indices), scores
+            logger.debug("Loading documents")
+            # Loading documents at this stage is slow
+            return [self.idx2txt(idx_list) for idx_list in indices], scores
 
     def idx2txt(self, indices):  # return List of Dict of str
-        '''
+        """
         Input: List of Dict( {"source": str, "index": int} )
         Output: List of str
-        '''
-        return [json.loads(
-            open(os.path.join(self.chunk_dir, i["source"] + ".jsonl")).read().strip().split('\n')[i["index"]]) for i in
-                indices]
+        """
+        loaded_docs = []
+        for i in tqdm.tqdm(indices, total=len(indices), desc="Loading documents", disable=not logger.level==logging.DEBUG):
+            text_path = os.path.join(self.chunk_dir, i["source"] + ".jsonl")
+            with open(text_path, "r") as f:
+                whole_file = f.read().strip().split('\n')
+                doc = json.loads(whole_file[i["index"]])
+                loaded_docs.append(doc)
+        return loaded_docs
 
 
 class RetrievalSystem:
@@ -367,53 +444,80 @@ class RetrievalSystem:
         self.corpus_name = corpus_name
         assert self.corpus_name in corpus_names
         assert self.retriever_name in retriever_names
+        logger.debug(f"Loading {self.retriever_name}")
         self.retrievers = []
         for retriever in retriever_names[self.retriever_name]:
             self.retrievers.append([])
             for corpus in corpus_names[self.corpus_name]:
-                self.retrievers[-1].append(Retriever(retriever, corpus, db_dir, HNSW=HNSW))
+                logger.debug(f"Loading {corpus} for {retriever}")
+                try:
+                    r = Retriever(retriever, corpus, db_dir, HNSW=HNSW)
+                except Exception as e:
+                    logger.error(f"Error loading {retriever}:\n{e}\n{traceback.format_exc()}")
+                    exit(1)
+                self.retrievers[-1].append(r)
         self.cache = cache
         if self.cache:
+            logger.debug(f"Loading cache")
             self.docExt = DocExtracter(cache=True, corpus_name=self.corpus_name, db_dir=db_dir)
         else:
             self.docExt = None
 
-    def retrieve(self, question: Text, k: int=32, rrf_k: int=100, id_only=False):
-        '''
-            Given a question, return the relevant snippets from the corpus
-        '''
-        assert type(question) == str
+    def retrieve(self,
+                 questions: List[Text],
+                 k: int = 32,
+                 rrf_k: int = 100,
+                 id_only: bool=False) -> List[Tuple[List[Dict[str, Any]], List[float]]]:
+        assert isinstance(questions, list), "Questions should be a list of strings"
 
-        output_id_only = id_only
         if self.cache:
             id_only = True
 
-        texts = []
-        scores = []
+        # Create a placeholder for each question
+        retrieval_per_question = {
+            i: {
+                "text": [],
+                "scores": []
+            }
+            for i in range(len(questions))
+        }
 
         if "RRF" in self.retriever_name:
             k_ = max(k * 2, 100)
         else:
             k_ = k
         for i in range(len(retriever_names[self.retriever_name])):
-            texts.append([])
-            scores.append([])
+            # Keep the retrieval results in separate lists
+            for q_idx in retrieval_per_question:
+                retrieval_per_question[q_idx]["text"].append([])
+                retrieval_per_question[q_idx]["scores"].append([])
             for j in range(len(corpus_names[self.corpus_name])):
-                t, s = self.retrievers[i][j].get_relevant_documents(question, k=k_, id_only=id_only)
-                texts[-1].append(t)
-                scores[-1].append(s)
-        texts, scores = self.merge(texts, scores, k=k, rrf_k=rrf_k)
-        if self.cache:
-            texts = self.docExt.extract(texts)
-        return texts, scores
+                t, s = self.retrievers[i][j].get_relevant_documents(questions, k=k_, id_only=id_only)
+                for q_idx, (t_i, s_i) in enumerate(zip(t, s)):
+                    retrieval_per_question[q_idx]["text"][-1].append(t_i)
+                    retrieval_per_question[q_idx]["scores"][-1].append(s_i)
+        output = []
+        for q_idx, ret_dict in retrieval_per_question.items():
+            logger.debug("In merge")
+            t, s = self.merge(ret_dict["text"], ret_dict["scores"], k=k, rrf_k=rrf_k)
+            logger.debug("Out of merge")
+            if self.cache:
+                logger.debug(f"In cache")
+                t = [self.docExt.extract(t_i) for t_i in t]
+            output.append((t, s))
+        return output
 
-    def merge(self, texts, scores, k=32, rrf_k=100):
-        '''
-            Merge the texts and scores from different retrievers
-        '''
+    def merge(self,
+              texts: List[List[Dict[str, Any]]],
+              scores: List[List[float]],
+              k: int = 32,
+              rrf_k: int = 100) -> Tuple[List[Dict[str, Any]], List[float]]:
+        """Merge the texts and scores from different retrievers"""
         RRF_dict = {}
+        # For each retriever
         for i in range(len(retriever_names[self.retriever_name])):
             texts_all, scores_all = None, None
+            # for each corpus
             for j in range(len(corpus_names[self.corpus_name])):
                 if texts_all is None:
                     texts_all = texts[i][j]
@@ -477,7 +581,7 @@ class DocExtracter:
             else:
                 self.dict = {}
                 for corpus in corpus_names[corpus_name]:
-                    for fname in tqdm.tqdm(sorted(os.listdir(os.path.join(self.db_dir, corpus, "chunk")))):
+                    for fname in tqdm.tqdm(sorted(os.listdir(os.path.join(self.db_dir, corpus, "chunk"))), desc=f"Loading {corpus} for cache"):
                         if open(os.path.join(self.db_dir, corpus, "chunk", fname)).read().strip() == "":
                             continue
                         for i, line in enumerate(
@@ -494,7 +598,7 @@ class DocExtracter:
             else:
                 self.dict = {}
                 for corpus in corpus_names[corpus_name]:
-                    for fname in tqdm.tqdm(sorted(os.listdir(os.path.join(self.db_dir, corpus, "chunk")))):
+                    for fname in tqdm.tqdm(sorted(os.listdir(os.path.join(self.db_dir, corpus, "chunk"))), desc=f"Loading {corpus} for cache"):
                         if open(os.path.join(self.db_dir, corpus, "chunk", fname)).read().strip() == "":
                             continue
                         for i, line in enumerate(
@@ -506,10 +610,14 @@ class DocExtracter:
                     json.dump(self.dict, f, indent=4)
         print("Initialization finished!")
 
-    def extract(self, ids):
+    def extract(self, ids: Union[Dict[str, Any], List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+        logger.debug(f"DocExtracter.extract() {ids=}")
+        if isinstance(ids, dict):
+            ids = [ids]
         if self.cache:
             output = []
             for i in ids:
+                logger.debug(f"{i=}")
                 item = self.dict[i] if type(i) == str else self.dict[i["id"]]
                 output.append(item)
         else:
@@ -519,3 +627,25 @@ class DocExtracter:
                 output.append(json.loads(
                     open(os.path.join(self.db_dir, item["fpath"])).read().strip().split('\n')[item["index"]]))
         return output
+
+
+if __name__ == "__main__":
+    logger.setLevel(logging.DEBUG)
+    retriever = MedRAGRetriever(
+        corpus_name="MEDIC",
+        db_dir=f"{os.environ['MEDIC']}/data/MedCorp",
+        n_returned_docs=5,
+        cache=False
+    )
+
+    questions = ["How many advil can I take in a day?", "What are the symptoms of flu?"]
+    topics = ["tester"] * len(questions)
+
+    # Make sure single retrieval works
+    out = retriever.get_passages(question=questions[0], topic=topics[0], k=10)
+    print(out)
+
+    # Test batching
+    out = retriever.get_passages_batched(questions=questions, topics=topics, k=100)
+    print(out)
+

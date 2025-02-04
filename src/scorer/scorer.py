@@ -31,17 +31,19 @@ class Scorer(ABC, Registrable):
         List[float],
     ]:
         """ """
-        
-        if not isinstance(instance, ScorerInstance):
+        # List of instances
+        if isinstance(instance, ScorerInstance):
+            results = [
+                self._score(instance)
+            ]
+        else:
             results = self._batch_score(instances=instance)
-            if not return_raw:
-                return [r["parsed"] for r in results]
-            return results
 
-        result = self._score(instance)
-        if not return_raw:
-            return result["parsed"]
-        return result
+        # Include all information
+        if return_raw:
+            return results
+        # Return only the output
+        return [r["parsed"] for r in results]
 
     def _batch_score(self, instances: List[ScorerInstance]) -> List[Dict[Text, Union[Text, float]]]:
         """ """

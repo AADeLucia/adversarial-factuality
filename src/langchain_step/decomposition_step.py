@@ -26,7 +26,8 @@ from langchain_interface.example_selectors import ConstantExampleSelector, Examp
 
 @dataclass(frozen=True, eq=True)
 class DecompositionResponse(LLMResponse):
-    claims: Text
+    messages: Text
+    claims: List[Text]
 
 
 class DecompositionOutputParser(BaseOutputParser[DecompositionResponse]):

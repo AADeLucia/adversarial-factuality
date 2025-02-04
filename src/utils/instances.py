@@ -17,6 +17,8 @@ class ScorerInstance(Instance):
     text: Text
     source_text: Union[None, Text]
     topic: Union[None, Text]
+    sentence: Union[None, Text]
+
 
 @dataclass(frozen=True, eq=True)
 class DedupScorerInstance(ScorerInstance):
@@ -30,12 +32,13 @@ class DedupScorerInstance(ScorerInstance):
 @dataclass(frozen=True, eq=True)
 class DecontextScorerInstance(ScorerInstance):
     sent: Text
-    
+
+
 @dataclass(frozen=True, eq=True)
 class RelevancyScorerInstance(ScorerInstance):
     sent: Text
 
-    
+
 @dataclass(frozen=True, eq=True)
 class LLMQueryInstance(Instance):
     id: Optional[int] = None
@@ -46,12 +49,14 @@ class LLMQueryInstance(Instance):
 @dataclass(frozen=True, eq=True)
 class DecontextInstance(LLMQueryInstance):
     sentence: Optional[Text] = ""
-    
+
+
 @dataclass(frozen=True, eq=True)
 class RelevancyInstance(LLMQueryInstance):
     question: Optional[Text] = ""
     sentence: Optional[Text] = ""
-    
+
+
 @dataclass(frozen=True, eq=True)
 class NextSearchInstance(LLMQueryInstance):
     knowledge: List[Text] = field(default_factory=list)

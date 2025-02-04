@@ -66,24 +66,43 @@ class FActScoreDecomposer(Decomposer):
     @overrides
     def _decompose(self, instance: ScorerInstance) -> List[ScorerInstance]:
         """ """
-
         instance_text = instance.text
         topic = instance.topic
 
-        if not self._sentencize:
-            outputs = self._agent.batch([{"input": instance_text.strip()}], config=self._runnable_config)
+        inputs = []
+        if self._sentencize:
+            for sentence in self._nlp(instance_text).sents:
+                s = sentence.text.strip()
+                if s:
+                    inputs.append({"input": s})
         else:
-            outputs = self._agent.batch([{"input": sentence.text.strip()} for sentence in self._nlp(instance_text).sents], config=self._runnable_config)
-        
-        return [ScorerInstance(text=atom, topic=topic, source_text=instance.source_text) for otp in outputs for atom in otp.claims]
-    
+            inputs.append({"input": instance_text.strip()})
+
+        raw_outputs = self._agent.batch(inputs, config=self._runnable_config)
+        outputs = []
+        for otp in raw_outputs:
+            for atom in otp.claims:
+                if self._is_valid_claim(atom):
+                    outputs.append(ScorerInstance(text=atom, topic=topic, source_text=instance.source_text))
+
+        return outputs
+
+    def _is_valid_claim(self, claim: Text) -> bool:
+        claim = claim.lower().strip()
+        # if not claim:
+        #     return False
+        # if "no verifiable claim" in claim:
+        #     return False
+        # if "need more context" in claim:
+        #     return False
+        return True
+
     @overrides
     def _batch_decompose(self, instances: List[ScorerInstance]) -> List[List[ScorerInstance]]:
         """
         """
-
         if not self._sentencize:
-            inputs = [{"input": instance.text} for idx, instance in enumerate(instances)]
+            inputs = [{"input": instance.text.strip()} for idx, instance in enumerate(instances)]
             num_sents = [1 for _ in instances]
         else:
             inputs = []
@@ -93,30 +112,27 @@ class FActScoreDecomposer(Decomposer):
                 sents = list(self._nlp(instance.text).sents)
                 num_sents.append(len(sents))
                 for sentence in sents:
-                    # inputs.append(LLMQueryInstance(id=idx, input=sentence.text))
-                    inputs.append({"input": sentence.text})
-
+                    inputs.append({"input": sentence.text.strip()})
         outputs = self._agent.batch(inputs, config=self._runnable_config)
         
         # now since we are getting all outputs
         results = []
-        # for ipt, opt in zip(inputs, outputs):
-        #     if idx + 1 > len(results):
-        #         results.append([])
-        #     results[ipt.id].extend([ScorerInstance(text=atom, topic=instances[ipt.id].topic, source_text=instances[ipt.id].source_text) for atom in opt.claims])
-        
+        inputs_idx = 0
         for nidx, ns in enumerate(num_sents):
             if ns == 0:
                 results.append([])
             else:
                 slice_ = outputs[:ns]
-                results.append([
-                    ScorerInstance(text=atom, topic=instances[nidx].topic, source_text=instances[nidx].source_text)
-                    for otp in slice_
-                    for atom in otp.claims
-                ])
+                res = []
+                for otp in slice_:
+                    orig_sentence = inputs[inputs_idx]["input"]
+                    for atom in otp.claims:
+                        res.append(
+                            ScorerInstance(text=atom, topic=instances[nidx].topic, source_text=instances[nidx].source_text, sentence=orig_sentence)
+                        )
+                    inputs_idx += 1
+                results.append(res)
                 outputs = outputs[ns:]
-                
+
         assert len(outputs) == 0, "Outputs should be empty at the end of the loop."
-            
         return results

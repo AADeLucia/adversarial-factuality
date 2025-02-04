@@ -71,7 +71,9 @@ class LLMSupportLocalScorer(Scorer):
 
         responses = self._agent.batch(input_instances, config=self._runnable_config)
 
-        return [
-            {"raw": response.messages, "parsed": response.evidential_support}
-            for response in responses
+        return [{
+            "raw": response.messages,
+            "parsed": response.evidential_support,
+            "claim_sentence": input.sentence
+        } for input, response in zip(instances, responses)
         ]

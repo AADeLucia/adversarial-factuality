@@ -244,7 +244,7 @@ class DecomposeScorer(Scorer):
             results[idx] = {
                 "parsed": agg_score,
                 "raw": " ## ".join([str(s['raw']) for s in score_dicts]),
-                "claims": [{'text': s['text'], 'score': s['parsed'], 'raw': str(s['raw']), 'support': s.get('support_input')} for s in score_dicts],
+                "claims": [{'text': s['text'], 'claim_sentence': s.get('claim_sentence'), 'score': s['parsed'], 'raw': str(s['raw']), 'support': s.get('support_input')} for s in score_dicts],
             }
             
         return [results[index] for index in range(len(instances))]

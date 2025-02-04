@@ -22,8 +22,8 @@ class ScoreGenerationTask(Task):
         input_path: Text,
         text_key: Text,
         topic_key: Text,
-        source_key: Text,
-        output_path: Text
+        output_path: Text,
+        source_key: Text = "",
     ):
         super().__init__()
         self.scorer = scorer
@@ -47,7 +47,7 @@ class ScoreGenerationTask(Task):
                 data = json.load(file_)
 
         # Prepare input
-        inputs = [ScorerInstance(text=item[self.text_key], topic=item[self.topic_key], source_text=item[self.source_key]) for item in tqdm(data)]
+        inputs = [ScorerInstance(text=item[self.text_key], topic=item[self.topic_key], source_text=item.get(self.source_key, ""), sentence=None) for item in tqdm(data)]
 
         # Run
         results = self.scorer(inputs, return_raw=True)
