@@ -55,7 +55,8 @@ class PrecomputedDecomposer(Decomposer):
                 ScorerInstance(
                     text=claim,
                     topic=instance.topic,
-                    source_text=instance.source_text
+                    source_text=instance.source_text,
+                    sentence=None
                 )
             )
         return output
