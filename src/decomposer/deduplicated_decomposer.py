@@ -50,10 +50,11 @@ class DeduplicatedDecomposer(Decomposer):
 
         if self._sentencize:
             sent_seqs = [
-                ScorerInstance(text=sent, topic=instance.topic, source_text=instance.source_text)
+                ScorerInstance(text=sent, topic=instance.topic, source_text=instance.source_text, sentence=sent)
                 for sent in self._to_sents(instance.text)
             ]
         else:
+            instance.sentence = instance.text
             sent_seqs = [instance]
 
         checkworthiness = self._sentence_level_checkworthy_scorer(
@@ -156,6 +157,7 @@ class DeduplicatedDecomposer(Decomposer):
                     sent=sent_tuples[ci[1]][2],
                     sent_checkworthy=sent_tuples[ci[1]][1],
                     claim_checkworthy=ccw,
+                    sentence=sent_tuples[ci[1]][2]
                 ),
             )
             for ci, ccw in zip(claim_inputs, claim_checkworthiness)
@@ -197,7 +199,7 @@ class DeduplicatedDecomposer(Decomposer):
             ]
 
         sent_instances = [
-            ScorerInstance(text=sent, topic=instances[idx].topic, source_text=instances[idx].source_text)
+            ScorerInstance(text=sent, topic=instances[idx].topic, source_text=instances[idx].source_text, sentence=sent)
             for idx, sent in sent_tuples
         ]
 
@@ -213,7 +215,7 @@ class DeduplicatedDecomposer(Decomposer):
             if ckwt > 0.5
         ]
         return [
-            ScorerInstance(text=sent, topic=instances[idx].topic, source_text=instances[idx].source_text)
+            ScorerInstance(text=sent, topic=instances[idx].topic, source_text=instances[idx].source_text, sentence=sent)
             for idx, _, sent in sent_tuples
         ], sent_tuples
 

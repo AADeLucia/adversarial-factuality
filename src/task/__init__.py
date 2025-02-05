@@ -1,6 +1,5 @@
 from .task import Task
 from .score_generation import ScoreGenerationTask
-from .score_against_reference import ScoreGenerationReferenceTask
 from .plot_comparision import PlotComparisionTask
 from .train_unli_task import TrainUNLITask
 from .calculate_correlation import CalculateCorrelationTask
