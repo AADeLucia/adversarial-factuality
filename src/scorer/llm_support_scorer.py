@@ -141,8 +141,6 @@ class LLMSupportScorer(Scorer):
         self, instances: List[ScorerInstance]
     ) -> List[Dict[Text, Text | float]]:
         """Now we will first retrieve for all the instances."""
-        print(f"{instances[0]=}")
-
         topics = [instance.topic for instance in instances]
         texts = [instance.text for instance in instances]
 
