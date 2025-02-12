@@ -34,7 +34,8 @@ class LLMSupportScorer(Scorer):
         retriever: Retriever,
         base_url: Optional[Text] = None,
         api_key: Optional[Text] = None,
-        # retriever_batch_size: int = 256
+        max_sequence_length: int = 128
+            # retriever_batch_size: int = 256
     ):
         """ """
         super().__init__()
@@ -42,6 +43,7 @@ class LLMSupportScorer(Scorer):
         self._model_name = model_name
         self._base_url = base_url
         self._api_key = api_key
+        self._max_sequence_length = max_sequence_length
         # self._retriever_batch_size = retriever_batch_size
 
         # def _parse_input(instance: FActScoreQueryInstance) -> Dict[Text, Text]:
@@ -98,7 +100,7 @@ class LLMSupportScorer(Scorer):
             model_name=self._model_name,
             base_url=self._base_url,
             api_key=self._api_key,
-            max_tokens=128,
+            max_tokens=self._max_sequence_length,
             # top_p=0.98,
             model_kwargs={"top_p": 0.98},
             temperature=0.0,

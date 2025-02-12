@@ -68,6 +68,7 @@ class MedRAGRetriever(Retriever):
             db_dir=db_dir,
             HNSW=HNSW,
             cache=cache)
+        self.use_cache = cache
         self.n_returned_docs = n_returned_docs
         self.db_dir = db_dir
 
@@ -84,7 +85,7 @@ class MedRAGRetriever(Retriever):
             questions=[question],
             k=self.n_returned_docs,  # Final # of docs returned based on top scores
             rrf_k=self.n_returned_docs * 5,  # # docs to return from each source
-            id_only=True
+            id_only=False if self.use_cache else True
         )
         retrieved = self._format_retrieved(results)[0]
         return retrieved
@@ -97,7 +98,7 @@ class MedRAGRetriever(Retriever):
             questions=questions,
             k=self.n_returned_docs,  # Final # of docs returned based on top scores
             rrf_k=self.n_returned_docs * 5,  # # docs to return from each source
-            id_only=True
+            id_only=False if self.use_cache else True
         )
         logger.debug(f"Done gathering results")
         retrieved = self._format_retrieved(batched_results)
