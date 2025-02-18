@@ -168,3 +168,5 @@ data/
 ckpt/
 logs/
 wandb/
+cache/
+cache_old/
