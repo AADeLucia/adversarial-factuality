@@ -55,7 +55,7 @@ class LLMSupportLocalScorer(Scorer):
         }
 
         response = self._agent.invoke(input_instance, config=self._runnable_config)
-        return {"raw": response.messages, "parsed": response.evidential_support}
+        return {"raw": response.messages, "parsed": response.evidential_support, "support_input": instance.source_text}
 
     @overrides
     def _batch_score(
@@ -72,10 +72,14 @@ class LLMSupportLocalScorer(Scorer):
         ]
 
         responses = self._agent.batch(input_instances, config=self._runnable_config)
+        results = []
+        for response, input_instance in zip(responses, instances):
+            results.append({
+                "raw": response.messages,
+                "parsed": response.evidential_support,
+                "claim_sentence": input.sentence,
+                "support_input": input_instance.source_text,
+            })
 
-        return [{
-            "raw": response.messages,
-            "parsed": response.evidential_support,
-            "claim_sentence": input.sentence
-        } for input, response in zip(instances, responses)
-        ]
+        return results
+
