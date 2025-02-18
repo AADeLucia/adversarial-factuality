@@ -81,13 +81,12 @@ class MedRAGRetriever(Retriever):
         :param k: k is ignored. See n_returned_docs in class initialization.
         :return: 
         """
-        results = self.retriever.retrieve(
+        results = self.get_passages_batched(
+            topics=[topic],
             questions=[question],
-            k=self.n_returned_docs,  # Final # of docs returned based on top scores
-            rrf_k=self.n_returned_docs * 5,  # # docs to return from each source
-            id_only=False if self.use_cache else True
+            k=k
         )
-        retrieved = self._format_retrieved(results)[0]
+        retrieved = results[0]
         return retrieved
 
     @overrides
@@ -98,7 +97,7 @@ class MedRAGRetriever(Retriever):
             questions=questions,
             k=self.n_returned_docs,  # Final # of docs returned based on top scores
             rrf_k=self.n_returned_docs * 5,  # # docs to return from each source
-            id_only=False if self.use_cache else True
+            id_only=True
         )
         logger.debug(f"Done gathering results")
         retrieved = self._format_retrieved(batched_results)
@@ -124,34 +123,38 @@ class MedRAGRetriever(Retriever):
         return retrieved
 
     def _load_doc_from_id(self, id: Text) -> Dict[Text, Any]:
-        # Hacky way to load the document
-        # Format example: pubmed23n0973_8682
-        id_parts = id.split("_")
-        if len(id_parts) > 2:
-            index = int(id_parts[-1])
-            doc_id = "_".join(id_parts[:-1])
+        if self.use_cache:
+            doc = self.retriever.docExt.extract([id])[0]
         else:
-            doc_id, index = id_parts
-            index = int(index)
+            # Hacky way to load the document
+            # Format example: pubmed23n0973_8682
+            # TODO: use DocExtractor system self.dict which has id2path?
+            id_parts = id.split("_")
+            if len(id_parts) > 2:
+                index = int(id_parts[-1])
+                doc_id = "_".join(id_parts[:-1])
+            else:
+                doc_id, index = id_parts
+                index = int(index)
 
-        if "pubmed" in doc_id:
-            corpus_name = "pubmed"
-        elif "article-" in doc_id:
-            corpus_name = "statpearls"
-        elif "wiki" in doc_id:
-            corpus_name = "wikipedia"
-        else:
-            corpus_name = "textbooks"
+            if "pubmed" in doc_id:
+                corpus_name = "pubmed"
+            elif "article-" in doc_id:
+                corpus_name = "statpearls"
+            elif "wiki" in doc_id:
+                corpus_name = "wikipedia"
+            else:
+                corpus_name = "textbooks"
 
-        doc_path = os.path.join(self.db_dir, corpus_name, "chunk", f"{doc_id}.jsonl")
+            doc_path = os.path.join(self.db_dir, corpus_name, "chunk", f"{doc_id}.jsonl")
 
-        # https://stackoverflow.com/questions/6022384/bash-tool-to-get-nth-line-from-a-file
-        doc = subprocess.check_output([
-            "sed",
-            f"{index+1}q;d",  # sed is not 0-based
-            doc_path
-        ])
-        doc = json.loads(doc)
+            # https://stackoverflow.com/questions/6022384/bash-tool-to-get-nth-line-from-a-file
+            doc = subprocess.check_output([
+                "sed",
+                f"{index+1}q;d",  # sed is not 0-based
+                doc_path
+            ])
+            doc = json.loads(doc)
         return doc
 
 
@@ -471,9 +474,6 @@ class RetrievalSystem:
                  id_only: bool=False) -> List[Tuple[List[Dict[str, Any]], List[float]]]:
         assert isinstance(questions, list), "Questions should be a list of strings"
 
-        if self.cache:
-            id_only = True
-
         # Create a placeholder for each question
         retrieval_per_question = {
             i: {
@@ -502,7 +502,8 @@ class RetrievalSystem:
             logger.debug("In merge")
             t, s = self.merge(ret_dict["text"], ret_dict["scores"], k=k, rrf_k=rrf_k)
             logger.debug("Out of merge")
-            if self.cache:
+            # The use_cache here is not compatible with MedRAGRetriever
+            if not id_only:
                 logger.debug(f"In cache")
                 t = [self.docExt.extract(t_i) for t_i in t]
             output.append((t, s))
@@ -633,10 +634,10 @@ class DocExtracter:
 if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
     retriever = MedRAGRetriever(
-        corpus_name="MEDIC",
+        corpus_name="MedCorp",
         db_dir=f"{os.environ['MEDIC']}/data/MedCorp",
         n_returned_docs=5,
-        cache=False
+        cache=True
     )
 
     questions = ["How many advil can I take in a day?", "What are the symptoms of flu?"]
