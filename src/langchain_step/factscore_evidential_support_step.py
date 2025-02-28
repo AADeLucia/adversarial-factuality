@@ -71,3 +71,22 @@ class FActScoreEvidentialSupportStep(Step):
     @overrides
     def get_output_parser(self) -> Runnable:
         return FActScoreEvidentialSupportOutputParser()
+
+
+@Step.register("factscore-knowledge-support")
+class FActScoreKnowledgeSupportStep(Step):
+    @overrides
+    def get_prompt_template(self) -> Runnable:
+        return ChatPromptTemplate.from_messages(
+            [
+                ("human", (
+                    "Using your own knowledge, answer the question.\n\n"
+                    "Input: {input} True or False?\n\nOutput:"
+                ))
+            ]
+        )
+
+    @overrides
+    def get_output_parser(self) -> Runnable:
+        return FActScoreEvidentialSupportOutputParser()
+

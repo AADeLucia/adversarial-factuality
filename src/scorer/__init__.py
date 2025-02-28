@@ -2,6 +2,7 @@ from .scorer import Scorer
 from .decompose_scorer import DecomposeScorer
 from .llm_support_scorer import LLMSupportScorer
 from .llm_support_scorer_local import LLMSupportLocalScorer
+from .llm_support_scorer_internal import LLMSupportInternalScorer
 from .llm_checkworthy_scorer import (
     LLMSpecificCheckWorthyScorer,
     LLMGeneralCheckWorthyScorer
