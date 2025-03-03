@@ -1,11 +1,21 @@
 """
 """
-
+import os
+import sys
 from abc import ABC, abstractmethod
-from ..utils.instances import ScorerInstance
 from typing import Text, List, Tuple, Union
+
 from overrides import overrides
 from registrable import Registrable
+
+# Easier for debugging
+try:
+    from ..utils.instances import ScorerInstance
+except ImportError as err:
+    current_folder = os.path.dirname(__file__)
+    src_folder = os.path.dirname(current_folder)
+    sys.path.append(src_folder)
+    from utils.instances import ScorerInstance
 
 
 class Decomposer(ABC, Registrable):
