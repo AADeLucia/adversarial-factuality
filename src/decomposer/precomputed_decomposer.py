@@ -45,7 +45,7 @@ class PrecomputedDecomposer(Decomposer):
         in {'topic': '', 'claims': []} format
         """
         super().__init__()
-        self._nlp = spacy.load(nlp_model_name, disable=["ner", "parser"])
+        self._nlp = spacy.load(nlp_model_name)  # disable=["ner", "parser"]
         self._nlp.add_pipe("sentencizer")
         self._sentencize = sentencize
         self.precomputed_claims = self._load_claims(claims_path, topic_key, claims_key)
@@ -54,22 +54,23 @@ class PrecomputedDecomposer(Decomposer):
     def _decompose(self, instance: ScorerInstance) -> List[ScorerInstance]:
         """Decompose claims from an instance"""
         output = []
+        instance_claims_all = self.precomputed_claims.get(instance.topic, [])
         if self._sentencize:
-            for idx, sentence in enumerate(self._nlp(instance.text).sents):
-                s = sentence.text.strip()
-                if s:
-                    sentence_claims = self.precomputed_claims.get(instance.topic, [])[idx]
-                    for claim in sentence_claims:
-                        output.append(
-                            ScorerInstance(
-                                text=claim,
-                                topic=instance.topic,
-                                source_text=instance.source_text,
-                                sentence=s
-                            )
+            instance_sentences = [s for s in self._nlp(instance.text).sents]
+            for idx, sentence in enumerate(instance_sentences):
+                sentence = sentence.text.strip()
+                sentence_claims = instance_claims_all[idx]
+                for claim in sentence_claims:
+                    output.append(
+                        ScorerInstance(
+                            text=claim,
+                            topic=instance.topic,
+                            source_text=instance.source_text,
+                            sentence=sentence
                         )
+                    )
         else:
-            for claim in self.precomputed_claims.get(instance.topic, []):
+            for claim in instance_claims_all:
                 output.append(
                     ScorerInstance(
                         text=claim,
